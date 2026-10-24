@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Mock Google Editor</title>
+  <style>
+    body { font: 14px Arial; margin: 20px; background: #fff; }
+    #docs-menubar { display: flex; gap: 12px; padding: 6px 10px; background: #f8f9fa; border-bottom: 1px solid #dadce0; }
+    #docs-menubar button { border: none; background: none; font: 14px Arial; cursor: pointer; padding: 4px 8px; }
+    .goog-menu {
+      display: none; position: absolute; background: #fff; border: 1px solid #dadce0;
+      box-shadow: 0 2px 10px rgba(0,0,0,.2); min-width: 220px; z-index: 100; padding: 6px 0;
+    }
+    .goog-menu.open { display: block; }
+    .goog-menuitem { padding: 6px 32px 6px 12px; cursor: pointer; }
+    .goog-menuitem:hover { background: #f1f3f4; }
+    .goog-submenu { font-weight: 500; }
+    #log { margin-top: 24px; font: 12px monospace; white-space: pre; background: #f1f3f4; padding: 10px; }
+  </style>
+</head>
+<body>
+  <div id="docs-menubar">
+    <button id="docs-file-menu">File</button>
+    <button id="docs-edit-menu">Edit</button>
+    <button id="docs-insert-menu">Insert</button>
+    <button id="docs-format-menu">Format</button>
+    <button id="docs-data-menu">Data</button>
+    <button id="docs-tools-menu">Tools</button>
+    <button id="docs-view-menu">View</button>
+    <button id="docs-extensions-menu">Extensions</button>
+    <button id="docs-help-menu">Help</button>
+  </div>
+
+  <!-- Edit menu (Closure-style) -->
+  <div class="goog-menu" id="menu-edit" style="left:60px; top:60px;">
+    <div class="goog-menuitem goog-submenu" data-opens="menu-pastespecial"><div aria-label="Paste special">Paste special</div></div>
+    <div class="goog-menuitem"><div aria-label="Undo u">Undo</div></div>
+    <div class="goog-menuitem"><div aria-label="Find and replace r">Find and replace</div></div>
+  </div>
+  <div class="goog-menu" id="menu-pastespecial" style="left:200px; top:100px;">
+    <div class="goog-menuitem" data-act="values-only"><div aria-label="Values only v">Values only</div></div>
+    <div class="goog-menuitem" data-act="formulas-only"><div aria-label="Formulas only f">Formulas only</div></div>
+    <div class="goog-menuitem" data-act="transposed"><div aria-label="Transposed t">Transposed</div></div>
+  </div>
+  <!-- Insert menu -->
+  <div class="goog-menu" id="menu-insert" style="left:150px; top:60px;">
+    <div class="goog-menuitem" data-act="insert-chart"><div aria-label="Chart">Chart</div></div>
+    <div class="goog-menuitem goog-submenu" data-opens="menu-rows"><div aria-label="Rows r">Rows</div></div>
+  </div>
+  <div class="goog-menu" id="menu-rows" style="left:290px; top:100px;">
+    <div class="goog-menuitem" data-act="insert-row-above"><div aria-label="Insert 1 row above">Insert 1 row above</div></div>
+  </div>
+  <!-- Format menu -->
+  <div class="goog-menu" id="menu-format" style="left:220px; top:60px;">
+    <div class="goog-menuitem" data-act="cond-format"><div aria-label="Conditional formatting">Conditional formatting</div></div>
+  </div>
+
+  <div id="log">EVENTS:\n</div>
+
+  <script>
+    window.__events = [];
+    function logEvent(tag, detail) {
+      window.__events.push(tag + (detail ? ":" + detail : ""));
+      const el = document.getElementById("log");
+      el.textContent = "EVENTS:\n" + window.__events.join("\n");
+    }
+
+    // Open/close menus like Closure does.
+    function closeAllMenus() {
+      document.querySelectorAll(".goog-menu.open").forEach((m) => m.classList.remove("open"));
+    }
+    const MENU_FOR = {
+      "docs-file-menu": null,
+      "docs-edit-menu": "menu-edit",
+      "docs-insert-menu": "menu-insert",
+      "docs-format-menu": "menu-format",
+      "docs-data-menu": null,
+      "docs-tools-menu": null,
+      "docs-view-menu": null,
+      "docs-extensions-menu": null,
+      "docs-help-menu": null,
+    };
+    document.querySelectorAll("#docs-menubar button").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = MENU_FOR[btn.id];
+        closeAllMenus();
+        if (id) {
+          const m = document.getElementById(id);
+          m.classList.add("open");
+          logEvent("menu-open", btn.id);
+        }
+      });
+    });
+    document.querySelectorAll(".goog-submenu").forEach((sub) => {
+      sub.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const target = document.getElementById(sub.dataset.opens);
+        document.querySelectorAll(".goog-menu.open").forEach((m) => { if (m !== target) m.classList.remove("open"); });
+        target.classList.add("open");
+        logEvent("submenu-open", sub.dataset.opens);
+      });
+    });
+    document.querySelectorAll(".goog-menuitem:not(.goog-submenu)").forEach((item) => {
+      item.addEventListener("click", (e) => {
+        e.stopPropagation();
+        logEvent("menuitem-click", item.dataset.act || item.innerText.trim());
+        closeAllMenus();
+      });
+    });
+
+    // Record every keyboard event the editor would receive.
+    for (const type of ["keydown"]) {
+      document.addEventListener(type, (e) => {
+        const mods =
+          (e.ctrlKey ? "ctrl+" : "") + (e.altKey ? "alt+" : "") + (e.shiftKey ? "shift+" : "") + (e.metaKey ? "meta+" : "");
+        logEvent(type, mods + e.key);
+      }, true);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>OpenAltKeys</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="logo">Alt</span>
+      <div>
+        <h1>OpenAltKeys</h1>
+        <p class="sub">Free &amp; open-source Office key-tips</p>
+      </div>
+    </div>
+    <label class="master">
+      <input type="checkbox" id="master" />
+      <span>On</span>
+    </label>
+  </header>
+
+  <section class="howto">
+    Press <b>Alt</b> in Google Sheets, Docs or Slides → key-tips appear.
+    <b>F10</b> cycles tip modes · <b>Esc</b> closes · <b>F4</b> repeats.
+  </section>
+
+  <section class="apps">
+    <label><input type="checkbox" id="app-sheets" /> <span>Google Sheets <i>(Excel keys)</i></span></label>
+    <label><input type="checkbox" id="app-docs" /> <span>Google Docs <i>(Word keys)</i></span></label>
+    <label><input type="checkbox" id="app-slides" /> <span>Google Slides <i>(PowerPoint keys)</i></span></label>
+  </section>
+
+  <section class="apps extras">
+    <label><input type="checkbox" id="opt-f4" /> <span><b>F4</b> repeats last command <i>(never while editing — Sheets' F4 still toggles $ refs)</i></span></label>
+    <label><input type="checkbox" id="opt-ctrlrc" /> <span><b>Ctrl + + / −</b> insert &amp; delete rows/columns <i>(Sheets only)</i></span></label>
+    <label><input type="checkbox" id="opt-f10" /> <span><b>F10</b> cycles tip modes</span></label>
+  </section>
+
+  <section class="cheat">
+    <div class="tabs" id="tabs">
+      <button data-app="sheets" class="active">Sheets</button>
+      <button data-app="docs">Docs</button>
+      <button data-app="slides">Slides</button>
+    </div>
+    <input id="search" type="search" placeholder="Search 100s of shortcuts…" autocomplete="off" />
+    <div class="count" id="count"></div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <footer>
+    <span class="oss">MIT licensed · no accounts · no tracking</span>
+    <a href="#" id="open-options">Settings</a>
+  </footer>
+
+  <script src="../data/sheets.js"></script>
+  <script src="../data/docs.js"></script>
+  <script src="../data/slides.js"></script>
+  <script src="../shared/cheatsheet.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

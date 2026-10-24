@@ -1,0 +1,83 @@
+{
+  "manifest_version": 3,
+  "name": "OpenAltKeys — Office-style Alt Shortcuts",
+  "short_name": "OpenAltKeys",
+  "version": "1.1.4",
+  "description": "Office-style Alt key tips (Alt H V V, Alt W F F…) for Google Sheets, Docs and Slides. Free, open source, no account, no tracking.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "minimum_chrome_version": "109",
+  "permissions": [
+    "storage"
+  ],
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "OpenAltKeys — free Office-style Alt shortcuts",
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://docs.google.com/spreadsheets/*"
+      ],
+      "js": [
+        "src/data/sheets.js",
+        "src/content/sheetio.js",
+        "src/content/extras.js",
+        "src/content/menus.js",
+        "src/content/dispatch.js",
+        "src/content/overlay.js",
+        "src/content/engine.js",
+        "src/content/app.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://docs.google.com/document/*"
+      ],
+      "js": [
+        "src/data/docs.js",
+        "src/content/menus.js",
+        "src/content/dispatch.js",
+        "src/content/overlay.js",
+        "src/content/engine.js",
+        "src/content/app.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "https://docs.google.com/presentation/*"
+      ],
+      "js": [
+        "src/data/slides.js",
+        "src/content/menus.js",
+        "src/content/dispatch.js",
+        "src/content/overlay.js",
+        "src/content/engine.js",
+        "src/content/app.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

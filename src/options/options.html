@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>OpenAltKeys — Settings</title>
+  <link rel="stylesheet" href="../popup/popup.css" />
+  <style>
+    html, body { width: auto; }
+    body { max-width: 640px; margin: 0 auto; padding: 28px 20px 40px; }
+    h2 { margin: 26px 0 10px; font-size: 15px; color: var(--acc); }
+    p.note { color: var(--mut); font-size: 12px; margin-bottom: 14px; }
+    .apps { grid-template-columns: 1fr 1fr; }
+    .list { max-height: 300px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="logo">Alt</span>
+      <div>
+        <h1>OpenAltKeys Settings</h1>
+        <p class="sub">Free &amp; open-source Office Alt key-tips for Google Workspace</p>
+      </div>
+    </div>
+  </header>
+
+  <h2>How to use</h2>
+  <p class="note">
+    Open Google Sheets, Docs or Slides and press <b>Alt</b> (Option on Mac).
+    Excel / Word / PowerPoint style key-tips appear — type the letters you know,
+    e.g. <b>Alt H V V</b> pastes values in Sheets. <b>Esc</b> closes,
+    <b>F10</b> cycles tip modes (shown → ghost → hidden), <b>F4</b> repeats the
+    last command, and <b>Ctrl + + / −</b> insert or delete rows and columns.
+  </p>
+
+  <h2>Where it works</h2>
+  <section class="apps">
+    <label><input type="checkbox" id="app-sheets" /> <span>Google Sheets <i>(Excel keys)</i></span></label>
+    <label><input type="checkbox" id="app-docs" /> <span>Google Docs <i>(Word keys)</i></span></label>
+    <label><input type="checkbox" id="app-slides" /> <span>Google Slides <i>(PowerPoint keys)</i></span></label>
+    <label><input type="checkbox" id="master" /> <span><b>Master switch</b> <i>(everything)</i></span></label>
+  </section>
+
+  <h2>Extras</h2>
+  <section class="apps">
+    <label><input type="checkbox" id="opt-f4" /> <span><b>F4</b> repeats last command <i>(never while editing — Sheets' F4 still toggles $ refs)</i></span></label>
+    <label><input type="checkbox" id="opt-ctrlrc" /> <span><b>Ctrl + + / −</b> insert &amp; delete rows/columns <i>(Sheets only)</i></span></label>
+    <label><input type="checkbox" id="opt-f10" /> <span><b>F10</b> cycles tip modes <i>(shown → ghost → hidden)</i></span></label>
+  </section>
+
+  <h2>Disabled sequences</h2>
+  <p class="note">
+    Comma-separated sequence prefixes for OpenAltKeys to ignore — e.g.
+    <b>HV</b> switches off the whole Home ▸ Clipboard branch, <b>HVV</b>
+    only Paste Values. Ignored sequences are skipped entirely on every
+    path — typed on the page, typed while the tips bar has focus, even
+    clicked in the panel: no key of the sequence is ever typed into the
+    document. Useful when a sequence collides with your own habits.
+  </p>
+  <input id="disabled-seqs" type="text" placeholder="e.g. HVV, FF" autocomplete="off"
+    style="all: unset; box-sizing: border-box; width: 100%; background: #1f2126; color: #e8eaed; border: 1px solid #5f6368; border-radius: 6px; padding: 8px 10px; font: 13px/1.3 Arial, sans-serif;" />
+
+  <h2>All shortcuts</h2>
+  <p class="note">The same searchable cheat sheet as the toolbar popup. Entries marked <b>guide</b> show instructions for actions Google has no shortcut or automation for.</p>
+  <section class="cheat">
+    <div class="tabs" id="tabs">
+      <button data-app="sheets" class="active">Sheets</button>
+      <button data-app="docs">Docs</button>
+      <button data-app="slides">Slides</button>
+    </div>
+    <input id="search" type="search" placeholder="Search shortcuts…" autocomplete="off" />
+    <div class="count" id="count"></div>
+    <div class="list" id="list"></div>
+  </section>
+
+  <h2>About</h2>
+  <p class="note">
+    OpenAltKeys is 100% free and open source under the MIT license. It collects
+    nothing, has no accounts, talks to no servers, and works entirely in your
+    browser. Office, Excel, Word, PowerPoint, Google Sheets, Docs and Slides are
+    trademarks of their respective owners; this project is not affiliated with
+    Microsoft or Google.
+  </p>
+
+  <script src="../data/sheets.js"></script>
+  <script src="../data/docs.js"></script>
+  <script src="../data/slides.js"></script>
+  <script src="../shared/cheatsheet.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

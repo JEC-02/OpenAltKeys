@@ -1,0 +1,18 @@
+{
+  "name": "openaltkeys",
+  "version": "1.1.4",
+  "private": true,
+  "type": "module",
+  "description": "Office-style Alt key tips (Alt H V V, Alt W F F…) for Google Sheets, Docs and Slides — free & open source, no account, no tracking.",
+  "license": "MIT",
+  "scripts": {
+    "test:unit": "node tests/engine.test.mjs && node tests/extras.test.mjs",
+    "test:mock": "node tests/integration.mock.mjs && node tests/integration.mocksheet.mjs",
+    "test:real": "node tests/integration.real.mjs && node tests/smoke.extras.real.mjs",
+    "shots": "node tests/screenshot.mjs",
+    "package": "python3 scripts/package_release.py"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

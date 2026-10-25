@@ -53,6 +53,12 @@
     <div id="t-formula-bar-input-container"><div id="t-formula-bar-input"></div></div>
   </div>
 
+  <!-- toolbar (Google exposes #docs-toolbar with aria-labelled buttons) -->
+  <div id="docs-toolbar" style="display:flex; gap:6px; padding:4px 10px; border-bottom:1px solid #dadce0; background:#fff;">
+    <div id="merge-btn" role="button" aria-label="Merge cells" tabindex="0"
+         style="padding:4px 10px; border:1px solid #dadce0; border-radius:4px; cursor:pointer;">Merge</div>
+  </div>
+
   <div id="grid-wrap"><table id="grid"></table></div>
   <div id="docs-statistics"></div>
   <div id="log"></div>
@@ -90,6 +96,27 @@
     </div>
   </div>
 
+  <!-- merge dropdown (toolbar popup) -->
+  <div class="goog-toolbar-menu-button-popup" id="merge-popup" style="display:none; position:absolute; left:90px; top:130px; background:#fff; border:1px solid #dadce0; box-shadow:0 2px 10px rgba(0,0,0,.2); min-width:200px; z-index:300; padding:6px 0;">
+    <div class="goog-menuitem" data-merge="all"><div aria-label="Merge all">Merge all</div></div>
+    <div class="goog-menuitem" data-merge="horiz"><div aria-label="Merge horizontally">Merge horizontally</div></div>
+    <div class="goog-menuitem" data-merge="vert"><div aria-label="Merge vertically">Merge vertically</div></div>
+    <div class="goog-menuitem" data-merge="unmerge"><div aria-label="Unmerge">Unmerge</div></div>
+  </div>
+
+  <!-- Google's protected-range warning, exact current copy (P1.7 fixture) -->
+  <div class="modal-dialog" id="heads-up-dialog" role="alertdialog" aria-label="Heads up!">
+    <div style="font-weight:700; margin-bottom:8px;">Heads up!</div>
+    <div style="max-width:340px;">
+      You're trying to edit part of this sheet that shouldn't be changed accidentally. Edit anyway?
+    </div>
+    <label style="display:block; margin:10px 0;"><input type="checkbox" id="heads-up-mute" /> Don't show this again for 5 minutes</label>
+    <div class="modal-dialog-buttons" style="margin-top:8px; text-align:right;">
+      <button id="heads-up-cancel" class="dlg-btn">Cancel</button>
+      <button id="heads-up-ok" class="dlg-btn goog-buttonset-default" style="margin-left:8px;">OK</button>
+    </div>
+  </div>
+
   <script>
     /* ============ mini spreadsheet model ============ */
     const COLS = 12, ROWS = 30;
@@ -99,6 +126,7 @@
       active: "A1",
       selA: "A1", selB: "A1",
       editing: null,        // { text }
+      merged: null,         // { kind, range } — set by the merge flow
       undo: [],
       events: [],
     };
@@ -380,6 +408,58 @@
       render();
     }
 
+    /* ---- merge toolbar + Google's protected-range "Heads up!" warning ---- */
+    // __warnOnEdit models a range protected with "Show a warning": every
+    // merge request pops the warning first (B10–B13 flip this flag).
+    window.__warnOnEdit = true;
+    const mergePopup = document.getElementById("merge-popup");
+    const headsUp = document.getElementById("heads-up-dialog");
+    let pendingMerge = null;
+
+    function applyMerge(kind) {
+      state.merged = { kind: kind, range: state.selA + ":" + state.selB };
+      logEv("merge:" + kind, state.merged.range);
+      render();
+    }
+    // Google pops the warning ~150 ms after the merge request.
+    function pickMerge(kind, native) {
+      setTimeout(() => {
+        if (window.__warnOnEdit) {
+          pendingMerge = kind;
+          headsUp.classList.add("open");
+          logEv(native ? "heads-up-open-native" : "heads-up-open", kind);
+        } else {
+          applyMerge(kind);
+        }
+      }, 150);
+    }
+    document.getElementById("merge-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      mergePopup.style.display = mergePopup.style.display === "none" ? "block" : "none";
+      logEv("toolbar-click", "merge");
+    });
+    mergePopup.querySelectorAll(".goog-menuitem").forEach((item) => {
+      item.addEventListener("click", (e) => {
+        e.stopPropagation();
+        mergePopup.style.display = "none";
+        pickMerge(item.dataset.merge, false);
+      });
+    });
+    document.getElementById("heads-up-ok").addEventListener("click", () => {
+      headsUp.classList.remove("open");
+      logEv("heads-up-ok", pendingMerge);
+      applyMerge(pendingMerge);
+      pendingMerge = null;
+    });
+    document.getElementById("heads-up-cancel").addEventListener("click", () => {
+      headsUp.classList.remove("open");
+      logEv("heads-up-cancel", pendingMerge);
+      pendingMerge = null;
+    });
+    // Same warning, but triggered by the USER through Google's own UI —
+    // nothing armed the guard, so it must stay untouched (B11 control).
+    window.__nativeMerge = (kind) => pickMerge(kind, true);
+
     /* ---- keyboard (accepts synthetic/untrusted events — like the grid does) ---- */
     document.addEventListener("keydown", (e) => {
       const inNameBox = e.target && e.target.id === "t-name-box";
@@ -418,7 +498,8 @@
       if (e.key === "Escape") {
         e.preventDefault();
         state.editing = null; closeEditor(); closeMenus();
-        document.getElementById("resize-dialog").classList.remove("open");
+        document.querySelectorAll(".modal-dialog.open").forEach((d) => d.classList.remove("open"));
+        mergePopup.style.display = "none";
         render(); return;
       }
       if (e.key.startsWith("Arrow") && !state.editing) {

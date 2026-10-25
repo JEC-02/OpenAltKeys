@@ -174,6 +174,9 @@
   // Type a value into a cell (ends with Enter so it commits).
   // Only runs after the selection was verified to be on `ref`.
   async function writeCell(ref, text) {
+    // Extension-driven edit (Goal-Seek writeback, …): arm the heads-up
+    // guard so a protected-range warning cannot stall the solver loop.
+    try { window.OAKDialogGuard && window.OAKDialogGuard.arm(); } catch (e) { /* ignore */ }
     if (!(await navigateTo(ref))) return false;
     const chars = String(text).split("");
     for (const ch of chars) { D()?.sendKey(ch, document); await wait(8); }

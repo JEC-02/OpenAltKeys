@@ -26,6 +26,7 @@
     f4Repeat: true,
     ctrlRowCol: true,
     f10Modes: true,
+    headsUpGuard: true,
     disabledSeqs: "",
   };
 

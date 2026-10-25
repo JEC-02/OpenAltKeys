@@ -196,11 +196,29 @@
   }
 
   // Fire a combo at the element Google's editors listen on.
-  // Single dispatch only: document-level, where the editors bind their
+  // Single dispatch only: one document, where the editors bind their
   // keyboard handlers. Dispatching to the active element as well would make
   // events bubble through document handlers twice and double-execute.
+  // WHICH document matters: Google Docs keeps focus (and its key
+  // handlers) inside an offscreen same-origin iframe — a combo fired at
+  // the top document would never be seen there. Resolve the document that
+  // holds focus and dispatch into that one; fall back to the top document
+  // whenever focus is not inside a reachable frame (Sheets: always).
+  function focusedDocument() {
+    let doc = document;
+    for (let i = 0; i < 6; i++) {
+      const ae = doc.activeElement;
+      if (!ae || ae.tagName !== "IFRAME") break;
+      let inner = null;
+      try { inner = ae.contentDocument; } catch (err) { break; }
+      if (!inner) break;
+      doc = inner;
+    }
+    return doc;
+  }
+
   function pressCombo(combo) {
-    sendKey(combo, document);
+    sendKey(combo, focusedDocument());
   }
 
   async function pressCombos(combos, gapMs = 40) {
@@ -259,13 +277,14 @@
 
   async function searchCommand(query) {
     // Alt+/ focuses Google's "tool finder" (formerly search the menus).
-    sendKey("alt+/", document);
+    sendKey("alt+/", focusedDocument());
     await wait(400); // wait for the search box to appear & focus
+    const fdoc = focusedDocument();
     let input =
-      document.activeElement &&
-      (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") &&
-      !isForbiddenTarget(document.activeElement)
-        ? document.activeElement
+      fdoc.activeElement &&
+      (fdoc.activeElement.tagName === "INPUT" || fdoc.activeElement.tagName === "TEXTAREA") &&
+      !isForbiddenTarget(fdoc.activeElement)
+        ? fdoc.activeElement
         : null;
     if (!input) {
       input = document.querySelector(
@@ -375,6 +394,13 @@
     const kind = spec[0];
     const type = kind;
     let ok = false;
+    // Google Sheets: arm the heads-up guard so Google's protected-range
+    // warning ("…Edit anyway?") cannot stall a keyboard-driven command.
+    // Guides ("t") show text only — nothing to confirm. Docs and Slides
+    // load no guard, so the call is a safe no-op there (P1.7).
+    if (type !== "t") {
+      try { window.OAKDialogGuard && window.OAKDialogGuard.arm(); } catch (e) { /* ignore */ }
+    }
     try {
       switch (type) {
         case "k": {

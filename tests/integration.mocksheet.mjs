@@ -70,6 +70,16 @@ page.on("pageerror", (e) => errors.push(String(e)));
 await page.goto(`http://localhost:${PORT}/`, { waitUntil: "load" });
 await page.waitForTimeout(600);
 
+// Extension id (for the B12 live-settings toggle through the real options
+// page) — grab the service worker early, before it idles out.
+let extId = null;
+for (let i = 0; i < 20 && !extId; i++) {
+  const sws = browser.serviceWorkers ? browser.serviceWorkers() : [];
+  const m = sws.length ? String(sws[0].url()).match(/chrome-extension:\/\/([a-p]{32})\//) : null;
+  if (m) extId = m[1];
+  else await page.waitForTimeout(250);
+}
+
 const state = () => page.evaluate(() => window.__state);
 const type = async (keys) => { for (const k of keys) { await page.keyboard.press(k); await page.waitForTimeout(140); } };
 const clickCell = async (ref) => { await page.click(`td[data-ref='${ref}']`); await page.waitForTimeout(80); };
@@ -186,6 +196,78 @@ try {
   await page.waitForTimeout(250);
   st = await state();
   ok(st.cells.B4 && st.cells.B4.bold === true, "B9: control — Alt H 1 (not disabled) still works");
+
+  /* ---- B10: Alt H M M — merge cells; "Heads up!" warning auto-confirmed ---- */
+  // The mock models a range protected with "Show a warning": the merge
+  // pops Google's exact dialog. The guard (armed by runAction) must
+  // click OK by itself, once, and say so in a toast.
+  await page.fill("#t-name-box", "A1:B2");
+  await page.press("#t-name-box", "Enter");
+  await page.waitForTimeout(150);
+  await type(["Alt", "H", "M", "M"]);
+  await page.waitForTimeout(1800);
+  st = await state();
+  ok(st.merged && st.merged.kind === "all" && st.merged.range === "A1:B2",
+    `B10: Alt H M M merged A1:B2 (got ${JSON.stringify(st.merged)})`);
+  ok(st.events.some((e) => e.startsWith("heads-up-open:all")),
+    "B10: the protected-range warning did appear");
+  ok(st.events.some((e) => e.startsWith("heads-up-ok")),
+    "B10: warning confirmed (OK clicked) — merge went through");
+  ok(!(await page.$("#heads-up-dialog.open")), "B10: warning dialog closed again");
+  const toast10 = await page.textContent("#oak-toast").catch(() => "");
+  ok(/auto-confirmed/i.test(toast10 || ""),
+    `B10: guard said so ("${(toast10 || "").slice(0, 48)}…")`);
+  ok(!(await page.$("#heads-up-mute:checked")),
+    "B10: the 5-minute checkbox was left untouched");
+
+  /* ---- B11: control — the SAME warning from the user's own edit is NOT
+     confirmed. Only OpenAltKeys-triggered actions arm the guard. ---- */
+  await page.evaluate(() => window.__nativeMerge("all"));
+  await page.waitForTimeout(1400);
+  ok(!!(await page.$("#heads-up-dialog.open")),
+    "B11: native-triggered warning stayed open (guard not armed)");
+  await page.click("#heads-up-cancel");
+  await page.waitForTimeout(250);
+  st = await state();
+  const nativeIdx = st.events.findIndex((e) => e.startsWith("heads-up-open-native"));
+  ok(nativeIdx !== -1, "B11: control warning was the native one");
+  ok(!st.events.slice(nativeIdx).some((e) => e.startsWith("merge:")),
+    "B11: cancelled — no merge applied");
+  ok(!(await page.$("#heads-up-dialog.open")), "B11: dialog closed by the manual Cancel");
+
+  /* ---- B12/B13: the Settings toggle applies live (options page →
+     chrome.storage → storage.onChanged in the content script) ---- */
+  if (extId) {
+    const opt = await browser.newPage();
+    await opt.goto(`chrome-extension://${extId}/src/options/options.html`);
+    await opt.waitForTimeout(300);
+    await opt.uncheck("#opt-headsup");            // real options UI
+    await page.waitForTimeout(500);               // live-apply window
+    await page.bringToFront();
+    await type(["Alt", "H", "M", "C"]);            // Merge & Center
+    await page.waitForTimeout(1600);
+    ok(!!(await page.$("#heads-up-dialog.open")),
+      "B12: guard OFF (live) — warning left for the user");
+    await page.click("#heads-up-ok");
+    await page.waitForTimeout(250);
+    st = await state();
+    ok(st.merged && st.merged.kind === "all" && !(await page.$("#heads-up-dialog.open")),
+      "B12: manual OK completed the merge (guard off = user stays in control)");
+    await opt.check("#opt-headsup");              // re-enable through the UI
+    await page.waitForTimeout(500);
+    await opt.close();
+    await page.bringToFront();
+    await type(["Alt", "H", "M", "M"]);
+    await page.waitForTimeout(1800);
+    st = await state();
+    ok(st.merged && st.merged.kind === "all" && !(await page.$("#heads-up-dialog.open")),
+      "B13: guard back ON (live) — warning auto-confirmed again");
+    const toast13 = await page.textContent("#oak-toast").catch(() => "");
+    ok(/auto-confirmed/i.test(toast13 || ""), "B13: confirmation toast visible again");
+    await page.evaluate(() => (window.__warnOnEdit = false));
+  } else {
+    console.log("  (service worker unreachable — B12/B13 live-toggle checks skipped)");
+  }
 
   /* ---- B8: Esc hygiene + no errors ---- */
   await page.keyboard.press("Escape");

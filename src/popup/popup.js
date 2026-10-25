@@ -15,6 +15,7 @@
     f4Repeat: true,
     ctrlRowCol: true,
     f10Modes: true,
+    headsUpGuard: true,
     disabledSeqs: "",
   };
   let settings = { ...DEFAULTS };
@@ -43,6 +44,7 @@
       "opt-f4": "f4Repeat",
       "opt-ctrlrc": "ctrlRowCol",
       "opt-f10": "f10Modes",
+      "opt-headsup": "headsUpGuard",
     };
     for (const [id, key] of Object.entries(map)) {
       $(id).addEventListener("change", (e) => {
@@ -60,6 +62,7 @@
     $("opt-f4").checked = settings.f4Repeat !== false;
     $("opt-ctrlrc").checked = settings.ctrlRowCol !== false;
     $("opt-f10").checked = settings.f10Modes !== false;
+    $("opt-headsup").checked = settings.headsUpGuard !== false;
   }
 
   function save() {

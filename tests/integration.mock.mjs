@@ -341,6 +341,216 @@ await page.waitForTimeout(150);
   await page.waitForTimeout(150);
 }
 
+// ---- T16 (v1.1.5): Google Docs routes every keystroke through an offscreen
+// same-origin iframe (.docs-texteventtarget-iframe) that holds keyboard focus
+// while the document is edited. v1.1.4's document-level capture listeners
+// never saw keys typed there — Alt tips worked in Sheets (focus:
+// #waffle-rich-text-editor, top document) but not in Docs — and ["k", …]
+// combos were dispatched at the top document, which Docs' in-frame handlers
+// never saw either. v1.1.5 instruments every reachable same-origin frame
+// (live, via MutationObserver) and resolves the focused document before
+// dispatching. The frame is created dynamically here so the ENGINE's
+// observer discovers it — exactly like the real Docs boot — and the frame's
+// own recorder attaches after instrumentation, mirroring Google's listeners
+// sitting behind ours for consumed keys.
+{
+  await page.evaluate(() => {
+    const f = document.createElement("iframe");
+    f.id = "oak-test-textframe";
+    f.className = "docs-texteventtarget-iframe"; // the real Docs class name
+    // Visible but inert: same-origin, focusable target inside — the event
+    // semantics are identical to the real offscreen frame.
+    f.style.cssText =
+      "position:fixed;left:6px;top:120px;width:140px;height:36px;border:1px solid #999;background:#fff";
+    f.srcdoc =
+      "<!DOCTYPE html><body><div id='tgt' tabindex='-1' style='font:12px monospace'>frame target</div></body>";
+    document.body.appendChild(f);
+  });
+  // The engine re-sweeps frames on a 300ms debounce; give it time, then
+  // attach the frame's recorder and move focus inside it.
+  await page.waitForTimeout(700);
+  await page.evaluate(() => {
+    const d = document.getElementById("oak-test-textframe").contentDocument;
+    d.addEventListener("keydown", (e) => {
+      const mods =
+        (e.ctrlKey ? "ctrl+" : "") + (e.altKey ? "alt+" : "") +
+        (e.shiftKey ? "shift+" : "") + (e.metaKey ? "meta+" : "");
+      parent.__events.push("frame-keydown:" + mods + e.key);
+    }, true);
+    d.getElementById("tgt").focus();
+  });
+  await page.waitForTimeout(150);
+  const focusInFrame = await page.evaluate(() => {
+    const f = document.getElementById("oak-test-textframe");
+    return document.activeElement === f &&
+      f.contentDocument.activeElement && f.contentDocument.activeElement.id === "tgt";
+  });
+  ok(focusInFrame, "T16 setup: keyboard focus inside the same-origin frame (Docs-style)");
+
+  await page.evaluate(() => (window.__events = []));
+  await page.keyboard.press("Alt");
+  await page.waitForTimeout(250);
+  ok(await overlayRoot(), "T16a: Alt opens the tips while focus is inside the frame (v1.1.5 fix)");
+
+  await page.keyboard.press("H");
+  await page.waitForTimeout(150);
+  ok(await page.$("#oak-overlay-root .oak-panel"), "T16b: H walks the tree from frame focus");
+
+  await page.keyboard.press("V");
+  await page.waitForTimeout(120);
+  await page.keyboard.press("V");
+  await page.waitForTimeout(350);
+  const ev16 = await page.evaluate(() => window.__events);
+  ok(ev16.some((e) => /frame-keydown:ctrl\+shift\+v$/i.test(e)),
+    "T16c: combos dispatch into the focused frame document (Docs dispatch) → " + ev16.join(" | "));
+  ok(!ev16.some((e) => /:(h|v)$/i.test(e)),
+    "T16d: letters consumed by the tips never reach the frame (no stray text)");
+  ok(!ev16.some((e) => /^keydown:ctrl\+shift\+v$/i.test(e)),
+    "T16e: exactly one dispatch — nothing duplicated at the top document");
+
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(150);
+  ok(!(await overlayRoot()), "T16f: Esc closes from frame focus");
+
+  // Frame pointerdown must close the tips too (instrumented in-frame).
+  await page.keyboard.press("Alt");
+  await page.waitForTimeout(250);
+  ok(await overlayRoot(), "T16g setup: tips reopened");
+  await page.mouse.click(76, 138); // inside the visible test frame
+  await page.waitForTimeout(200);
+  ok(!(await overlayRoot()), "T16g: pointerdown inside the frame closes the tips");
+  await page.evaluate(() => document.getElementById("oak-test-textframe").remove());
+  await page.waitForTimeout(150);
+}
+
+// ---- T17 (v1.1.5): the real Google Docs failure — the text-event iframe is
+// OFFSCREEN (class docs-texteventtarget-iframe-negative-top, y:-10000) and
+// contains a contenteditable div that holds focus. Its rect in FRAME-LOCAL
+// coordinates looks perfectly visible, so v1.1.4's isEditing() called it
+// "actively editing" and closed the tips the moment a letter was pressed
+// (Alt worked, Alt+H vanished). v1.1.5 walks the frame chain and requires
+// top-page visibility. This replica reproduces the exact geometry.
+{
+  await page.evaluate(() => {
+    const f = document.createElement("iframe");
+    f.id = "oak-test-offscreen-frame";
+    f.className = "docs-texteventtarget-iframe docs-offscreen-z-index docs-texteventtarget-iframe-negative-top";
+    f.style.cssText = "position:fixed;left:0;top:-10000px;width:625px;height:1px;border:0";
+    f.srcdoc =
+      "<!DOCTYPE html><body><div id='edit' contenteditable='true' style='width:625px;height:18px'></div></body>";
+    document.body.appendChild(f);
+  });
+  await page.waitForTimeout(700); // engine re-sweep debounce
+  await page.evaluate(() => {
+    const d = document.getElementById("oak-test-offscreen-frame").contentDocument;
+    d.addEventListener("keydown", (e) => {
+      const mods =
+        (e.ctrlKey ? "ctrl+" : "") + (e.altKey ? "alt+" : "") +
+        (e.shiftKey ? "shift+" : "") + (e.metaKey ? "meta+" : "");
+      parent.__events.push("off-frame-keydown:" + mods + e.key);
+    }, true);
+    d.getElementById("edit").focus();
+  });
+  await page.waitForTimeout(150);
+  const geometry = await page.evaluate(() => {
+    const f = document.getElementById("oak-test-offscreen-frame");
+    const d = f.contentDocument;
+    const el = d.getElementById("edit");
+    const er = el.getBoundingClientRect();
+    const fr = f.getBoundingClientRect();
+    return {
+      focused: document.activeElement === f && d.activeElement === el,
+      editable: el.isContentEditable,
+      elRectInFrame: [Math.round(er.width), Math.round(er.height)],
+      frameTopInPage: Math.round(fr.top),
+    };
+  });
+  ok(geometry.focused && geometry.editable, "T17 setup: focus in an offscreen frame's contenteditable div (real Docs geometry)");
+  ok(geometry.elRectInFrame[0] > 0 && geometry.frameTopInPage < 0,
+    `T17 setup: healthy local rect (${geometry.elRectInFrame.join("x")}) inside an offscreen frame (top ${geometry.frameTopInPage}) — the v1.1.4 trap`);
+
+  await page.evaluate(() => (window.__events = []));
+  await page.keyboard.press("Alt");
+  await page.waitForTimeout(250);
+  ok(await overlayRoot(), "T17a: Alt opens the tips from the offscreen editable frame");
+
+  await page.keyboard.press("H");
+  await page.waitForTimeout(200);
+  ok(await page.$("#oak-overlay-root .oak-panel"),
+    "T17b: H walks the tree — the offscreen editor is NOT 'actively editing' (v1.1.5 fix)");
+
+  await page.keyboard.press("V");
+  await page.waitForTimeout(120);
+  await page.keyboard.press("V");
+  await page.waitForTimeout(350);
+  const ev17 = await page.evaluate(() => window.__events);
+  ok(ev17.some((e) => /off-frame-keydown:ctrl\+shift\+v$/i.test(e)),
+    "T17c: combos dispatch into the offscreen focused document → " + ev17.join(" | "));
+  ok(!ev17.some((e) => /:(h|v)$/i.test(e)),
+    "T17d: no letters leak into the offscreen editor");
+
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(150);
+  ok(!(await overlayRoot()), "T17e: Esc closes from the offscreen frame");
+  await page.evaluate(() => document.getElementById("oak-test-offscreen-frame").remove());
+  await page.waitForTimeout(100);
+
+  // Slides geometry: the same text-event frame collapsed to a 1x1 box at
+  // (0,-1). The inner contenteditable still reports ~960x18 in frame-local
+  // coordinates — translate-only visibility math calls it visible; the
+  // clip-to-frame-box step is what catches it (v1.1.5).
+  await page.evaluate(() => {
+    const f = document.createElement("iframe");
+    f.id = "oak-test-slides-frame";
+    f.className = "docs-texteventtarget-iframe docs-offscreen-z-index docs-texteventtarget-iframe-negative-top";
+    f.style.cssText = "position:fixed;left:0;top:-1px;width:1px;height:1px;border:0";
+    f.srcdoc =
+      "<!DOCTYPE html><body><div id='edit' contenteditable='true' style='width:960px;height:18px'></div></body>";
+    document.body.appendChild(f);
+  });
+  await page.waitForTimeout(700);
+  await page.evaluate(() =>
+    document.getElementById("oak-test-slides-frame").contentDocument.getElementById("edit").focus()
+  );
+  await page.waitForTimeout(150);
+  await page.keyboard.press("Alt");
+  await page.waitForTimeout(250);
+  ok(await overlayRoot(), "T17g setup: tips open from the 1x1 Slides-geometry frame");
+  await page.keyboard.press("H");
+  await page.waitForTimeout(200);
+  ok(await page.$("#oak-overlay-root .oak-panel"),
+    "T17g: H walks the tree — a 1x1 clipped frame is not a visible editor (Slides geometry)");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(150);
+  await page.evaluate(() => document.getElementById("oak-test-slides-frame").remove());
+  await page.waitForTimeout(100);
+
+  // Control: a VISIBLE frame's contenteditable IS editing — letters must
+  // close the tips instead of being swallowed (P1.8 preserved for visible
+  // editors like comment boxes in dialogs).
+  await page.evaluate(() => {
+    const f = document.createElement("iframe");
+    f.id = "oak-test-visible-frame";
+    f.style.cssText = "position:fixed;left:6px;top:120px;width:200px;height:40px;border:1px solid #999;background:#fff";
+    f.srcdoc = "<!DOCTYPE html><body><div id='edit' contenteditable='true' style='width:100%;height:20px'></div></body>";
+    document.body.appendChild(f);
+  });
+  await page.waitForTimeout(700);
+  await page.evaluate(() =>
+    document.getElementById("oak-test-visible-frame").contentDocument.getElementById("edit").focus()
+  );
+  await page.waitForTimeout(150);
+  await page.keyboard.press("Alt");
+  await page.waitForTimeout(250);
+  ok(await overlayRoot(), "T17f setup: tips open with focus in a VISIBLE frame editor");
+  await page.keyboard.press("H");
+  await page.waitForTimeout(250);
+  ok(!(await overlayRoot()),
+    "T17f: a letter into a VISIBLE frame editor closes the tips (typing protection intact)");
+  await page.evaluate(() => document.getElementById("oak-test-visible-frame").remove());
+  await page.waitForTimeout(100);
+}
+
 // ---- T10: no page errors during the whole run
 ok(errors.length === 0, "T10: no page errors " + (errors.length ? "→ " + errors[0] : ""));
 

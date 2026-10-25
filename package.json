@@ -1,6 +1,6 @@
 {
   "name": "openaltkeys",
-  "version": "1.1.4",
+  "version": "1.1.6",
   "private": true,
   "type": "module",
   "description": "Office-style Alt key tips (Alt H V V, Alt W F F…) for Google Sheets, Docs and Slides — free & open source, no account, no tracking.",
@@ -13,6 +13,6 @@
     "package": "python3 scripts/package_release.py"
   },
   "devDependencies": {
-    "playwright": "^1.49.0"
+    "playwright": "^1.57.0"
   }
 }

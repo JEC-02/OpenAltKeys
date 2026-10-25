@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "OpenAltKeys — Office-style Alt Shortcuts",
   "short_name": "OpenAltKeys",
-  "version": "1.1.4",
+  "version": "1.1.6",
   "description": "Office-style Alt key tips (Alt H V V, Alt W F F…) for Google Sheets, Docs and Slides. Free, open source, no account, no tracking.",
   "icons": {
     "16": "icons/icon-16.png",
@@ -40,6 +40,7 @@
         "src/data/sheets.js",
         "src/content/sheetio.js",
         "src/content/extras.js",
+        "src/content/dialogguard.js",
         "src/content/menus.js",
         "src/content/dispatch.js",
         "src/content/overlay.js",

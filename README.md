@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.4-2ea44f?style=flat-square" alt="version 1.1.4">
+  <img src="https://img.shields.io/badge/version-1.1.6-2ea44f?style=flat-square" alt="version 1.1.6">
   <img src="https://img.shields.io/badge/license-MIT-0078d4?style=flat-square" alt="license MIT">
   <img src="https://img.shields.io/badge/Chrome_%7C_Edge_%7C_Brave_%7C_Opera-supported-4285f4?style=flat-square" alt="Chromium browsers supported">
   <img src="https://img.shields.io/badge/Firefox_109%2B-supported-ff7139?style=flat-square" alt="Firefox 109+ supported">
-  <img src="https://img.shields.io/badge/tests-346%2F346-brightgreen?style=flat-square" alt="346 of 346 tests passing">
+  <img src="https://img.shields.io/badge/tests-400%2F400-brightgreen?style=flat-square" alt="400 of 400 tests passing">
   <img src="https://img.shields.io/badge/telemetry-none-informational?style=flat-square" alt="zero telemetry">
   <img src="https://img.shields.io/badge/PRs-welcome-ff69b4?style=flat-square" alt="PRs welcome">
 </p>
@@ -42,6 +42,7 @@ If your hands learned these in Excel, Word or PowerPoint — they already work i
 |---|---|
 | ⌨️ **True Alt-key sequences** | 395 sequences that mirror the Office ribbon — `Alt` then letters, exactly like Excel's key-tips |
 | 🧰 **Real power tools** | Trace Precedents, Find Dependents, Goal Seek and a Symbol palette, all driven through Google's own UI |
+| 🛟 **Heads-up auto-OK** | Google's “Heads up! … Edit anyway?” protected-range warning is confirmed for you — but only for commands OpenAltKeys itself ran, and it always tells you |
 | 🛡 **Native combos pass through** | `Alt+/`, `Alt+1`, `Alt+Enter`, `Alt+F` are *Google's* shortcuts — never hijacked |
 | 🔒 **Zero telemetry** | No accounts, no network calls, no analytics. Your toggles are the only thing it stores |
 | 🪟 **Compact by default** | Badges-only strip, labels on hover, idle fade-to-ghost — tips never park over your work |
@@ -51,7 +52,7 @@ If your hands learned these in Excel, Word or PowerPoint — they already work i
 
 **Chrome / Edge / Brave / Opera (Chromium)**
 
-1. Download & unzip the release **`openaltkeys-v1.1.4.zip`** — `manifest.json` sits at the top level of the ZIP (or `git clone` this repo and use the folder as-is).
+1. Download & unzip the release **`openaltkeys-v1.1.6.zip`** — `manifest.json` sits at the top level of the ZIP (or `git clone` this repo and use the folder as-is).
 2. Open `chrome://extensions`.
 3. Turn on **Developer mode** (top-right toggle).
 4. Click **Load unpacked** and select the folder containing `manifest.json`.
@@ -59,7 +60,7 @@ If your hands learned these in Excel, Word or PowerPoint — they already work i
 
 **Firefox (109+)**
 
-1. Download & unzip **`openaltkeys-firefox-v1.1.4.zip`**.
+1. Download & unzip **`openaltkeys-firefox-v1.1.6.zip`**.
 2. Open `about:debugging#/runtime/this-firefox`.
 3. Click **Load Temporary Add-on…** and pick `manifest.json` from the unzipped folder.
    (Temporary add-ons are removed when Firefox restarts — a Firefox limitation for unsigned extensions.)
@@ -80,11 +81,16 @@ Both ZIPs ship the full source tree — `src/`, `tests/`, `scripts/`, `docs/`, `
 | **Tab** | Move focus into the bar: Tab cycles controls, Enter/Space activate, Esc returns to the page |
 | **Ctrl + +/−** | Insert / delete rows & columns (Sheets only, row/column selected for you) |
 | Disabled sequences | Settings lets you switch off any prefix (e.g. `HV` frees the whole Clipboard branch) — skipped on every path, no key ever typed |
+| Protected ranges | Merging or editing a warned range pops Google's “Heads up! … Edit anyway?” dialog — OpenAltKeys auto-confirms it for its own commands (one per command, toast shown, toggle in Settings; native edits are never touched) |
 
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshot-tabs.png" alt="The key-tip strip on a Google Sheet"><sub><b>Tap Alt</b> — the Office-style key-tip bar appears over the sheet.</sub></td>
     <td width="50%"><img src="docs/screenshot-panel.png" alt="The grouped, filterable panel"><sub><b>Type H</b> — every continuation, grouped, filterable and clickable.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshot-docs-panel.png" alt="The grouped panel open over a real Google Doc"><sub><b>Google Docs</b> — the same Home panel, live (v1.1.5 frame fix).</sub></td>
+    <td width="50%"><img src="docs/screenshot-slides-panel.png" alt="The grouped panel open over a real Google Slides deck"><sub><b>Google Slides</b> — Alt sequences drive every editor the same way.</sub></td>
   </tr>
 </table>
 
@@ -110,6 +116,8 @@ The popup also renders a **searchable cheat sheet** of every sequence, with per-
 | `Alt` `N` `U` | **Symbol palette** | Click a symbol (Greek, math, arrows, currency, …) to type it into the cell — filter box included |
 
 These are the same sequences desktop Excel uses, so your muscle memory carries over. Goal Seek reads values via the selection status bar, shows every trial value as it iterates, and tells you if restoring the original value failed (Ctrl+Z is the fallback).
+
+**Why do my merges stall behind a "Heads up!" dialog?** That's Google's protected-range warning (Data ▸ Protect a sheet or range ▸ *Show a warning*) — it appears on *every* edit of a warned range, and Google ships no permanent off switch. OpenAltKeys confirms it automatically for commands you ran through the extension (`Alt H M M` merges without touching the mouse), shows a toast whenever it did, and leaves the dialog untouched for edits you made yourself. The toggle lives in Settings — “Heads-up auto-OK”.
 
 ## 🔒 Privacy — the short version
 
@@ -140,6 +148,7 @@ src/
   content/menus.js     drives Google's own Closure menus (.goog-menu / aria-labels)
   content/dispatch.js  action executor: keyboard → menu → toolbar → tool-finder cascade
   content/sheetio.js   Sheets I/O helpers (name box, formula bar, status bar)
+  content/dialogguard.js auto-confirms the "Heads up!" edit warning for extension-run commands (Sheets only)
   content/extras.js    Trace / Goal Seek / Symbol palette
   content/app.js       bootstrap: app detection + settings
   popup/ options/      cheat sheet + settings (all local)
@@ -170,7 +179,7 @@ Six dispatch kinds:
 </details>
 
 <details>
-<summary><b>🧪 Testing — 346 automated checks</b> — click to expand</summary>
+<summary><b>🧪 Testing — 400 automated checks</b> — click to expand</summary>
 
 <br>
 
@@ -179,8 +188,8 @@ Everything ships in the ZIP, and every path in the suite is relative to the pack
 ```bash
 npm install                            # dev-only: Playwright, for the browser suites
 npm run test:unit                      # or: node tests/engine.test.mjs && node tests/extras.test.mjs
-node tests/integration.mock.mjs        # 42 browser tests against a mock Google editor
-node tests/integration.mocksheet.mjs   # 24 end-to-end commands on a functional mock sheet
+node tests/integration.mock.mjs        # 62 browser tests against a mock Google editor
+node tests/integration.mocksheet.mjs   # 38 end-to-end commands on a functional mock sheet
 node tests/smoke.extras.real.mjs       # 8 checks against a live public Google Sheet
 node tests/integration.real.mjs        # 6 checks against a live public Google Sheet
 ```

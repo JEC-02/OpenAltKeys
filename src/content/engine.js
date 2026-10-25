@@ -415,8 +415,38 @@
   // formula bar, in-cell editor, comment box or the Docs page editor IS.
   function isEditing(el) {
     if (!isTextEntry(el)) return false;
-    const r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0;
+    let r = el.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return false;
+    // Frame-aware visibility (v1.1.5): rects inside an iframe are FRAME-LOCAL
+    // and their visible extent is CLIPPED to the frame's box. Google's
+    // editors park keyboard focus in offscreen text-event iframes — Docs:
+    // .docs-texteventtarget-iframe-negative-top at y:-10000; Slides: the
+    // same frame collapsed to a 1x1 box at (0,-1). Their contenteditable
+    // divs report healthy 600-900px rects in frame-local coordinates, which
+    // v1.1.4 mistook for "user is actively typing in a visible editor" and
+    // closed the tips on the first letter (Alt worked, Alt+H vanished).
+    // Walk the frame chain, translate AND clip the rect to every frame's
+    // box, then require a genuinely visible, user-sized editor.
+    let doc = el.ownerDocument;
+    for (let i = 0; i < 6; i++) {
+      if (!doc || doc === document) break;
+      const win = doc.defaultView;
+      const frame = win && win.frameElement;
+      if (!frame) break;
+      const fr = frame.getBoundingClientRect();
+      const left = Math.max(r.left + fr.left, fr.left);
+      const top = Math.max(r.top + fr.top, fr.top);
+      const right = Math.min(r.right + fr.left, fr.right);
+      const bottom = Math.min(r.bottom + fr.top, fr.bottom);
+      r = { left, top, right, bottom, width: right - left, height: bottom - top };
+      if (r.width <= 0 || r.height <= 0) return false; // clipped away entirely
+      doc = frame.ownerDocument;
+    }
+    return (
+      r.width >= 8 && r.height >= 8 &&
+      r.top < window.innerHeight && r.bottom > 0 &&
+      r.left < window.innerWidth && r.right > 0
+    );
   }
 
   function inOAKUI(el) {
@@ -659,6 +689,71 @@
     }
   }
 
+  /* ---------- same-origin frame instrumentation ----------
+   * Google Docs routes every keystroke through an offscreen, hidden
+   * same-origin iframe (.docs-texteventtarget-iframe) that holds keyboard
+   * focus the whole time the document is being edited. Events inside an
+   * iframe never bubble across the frame boundary, so the document-level
+   * capture listeners below would never see them — Alt tips worked in
+   * Sheets (focus: #waffle-rich-text-editor, top document) but not in
+   * Docs. Fix: attach the same capture listeners inside every reachable
+   * same-origin frame, discovered live — Docs recreates its text-event
+   * frame on mode switches, so a MutationObserver re-sweeps. Cross-origin
+   * frames are skipped by construction (contentDocument is unreachable).
+   * Synthetic events stay ours (isTrusted gate) — nothing changes for
+   * command execution.
+   */
+
+  const instrumentedDocs = new WeakSet();
+  let frameSweepTimer = 0;
+
+  function onPagePointerDown(e) {
+    if (!e.isTrusted || !Engine.active) return;
+    if (inOAKUI(e.target)) return;
+    closeTips();
+  }
+
+  function onPageFocusIn(e) {
+    if (!Engine.active) return;
+    if (inOAKUI(e.target) || !isEditing(e.target)) return;
+    closeTips();
+  }
+
+  function instrumentFrameDoc(doc) {
+    if (!doc || instrumentedDocs.has(doc)) return;
+    try {
+      doc.addEventListener("keydown", onKeyDown, true);
+      doc.addEventListener("keyup", onKeyUpGlobal, true);
+      doc.addEventListener("pointerdown", onPagePointerDown, true);
+      doc.addEventListener("focusin", onPageFocusIn, true);
+      instrumentedDocs.add(doc);
+    } catch (err) {
+      /* detached or being replaced — the next sweep retries */
+    }
+  }
+
+  function sweepFrames(rootDoc) {
+    const seen = new Set();
+    (function walk(doc) {
+      if (!doc || seen.has(doc)) return;
+      seen.add(doc);
+      let frames = [];
+      try { frames = doc.querySelectorAll("iframe"); } catch (err) { return; }
+      for (const f of frames) {
+        let d = null;
+        try { d = f.contentDocument; } catch (err) { /* cross-origin */ }
+        if (!d) continue; // cross-origin or not yet committed
+        instrumentFrameDoc(d);
+        walk(d); // nested same-origin frames
+      }
+    })(rootDoc || document);
+  }
+
+  function scheduleFrameSweep() {
+    clearTimeout(frameSweepTimer);
+    frameSweepTimer = setTimeout(() => sweepFrames(document), 300);
+  }
+
   /* ---------- bootstrap ---------- */
 
   function init(app, entries, settings) {
@@ -672,21 +767,22 @@
     document.addEventListener("keydown", onKeyDown, true);
     document.addEventListener("keyup", onKeyUpGlobal, true);
     // Clicking into the page closes the tips (only window-blur used to).
-    document.addEventListener("pointerdown", (e) => {
-      if (!e.isTrusted || !Engine.active) return;
-      if (inOAKUI(e.target)) return;
-      closeTips();
-    }, true);
+    document.addEventListener("pointerdown", onPagePointerDown, true);
     // Focus landing in a visible text field also closes them (P1.8).
-    document.addEventListener("focusin", (e) => {
-      if (!Engine.active) return;
-      if (inOAKUI(e.target) || !isEditing(e.target)) return;
-      closeTips();
-    }, true);
+    document.addEventListener("focusin", onPageFocusIn, true);
     // If the page focus moves (user clicks a dialog), close tips politely.
     window.addEventListener("blur", () => {
       if (Engine.active) closeTips();
     });
+    // Same-origin iframes (Docs' hidden text-event frame, live dialogs):
+    // instrument what exists now and watch for frames added later.
+    sweepFrames(document);
+    try {
+      new MutationObserver(scheduleFrameSweep).observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+      });
+    } catch (err) { /* MutationObserver is everywhere MV3 runs */ }
   }
 
   function updateSettings(s) {

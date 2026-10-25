@@ -24,7 +24,8 @@ global.document = {
 };
 global.chrome = { storage: { sync: { get: (d, cb) => cb({}), onChanged: { addListener: () => {} } } } };
 
-for (const f of ["../src/data/sheets.js", "../src/content/sheetio.js", "../src/content/extras.js", "../src/content/dispatch.js"]) {
+for (const f of ["../src/data/sheets.js", "../src/content/sheetio.js", "../src/content/extras.js",
+  "../src/content/dispatch.js", "../src/content/dialogguard.js"]) {
   (0, eval)(readFileSync(join(ROOT, f), "utf8"));
 }
 const Extras = win.OAKExtras;
@@ -229,6 +230,49 @@ section("readSum");
   ok(IO.readSum("") === null, "empty → null");
   ok(IO.readSum("Count: 2 Average: 6 Max: 10") === null, "ambiguous stats without Sum → null (never guess)");
   ok(IO.firstNumber("Sum: 123.5") === 123.5, "firstNumber kept for compatibility");
+}
+
+/* ---- heads-up guard matchers (P1.7 — dialogguard.js) ---- */
+section("heads-up guard");
+{
+  const G = win.OAKDialogGuard.__test;
+  ok(!!G && typeof G.isHeadsUpWarning === "function" && typeof G.isConfirmLabel === "function",
+    "guard exposes its pure matchers");
+  // Google's current protected-range warning, exact copy (incl. the
+  // "Don't show this again for 5 minutes" checkbox text).
+  ok(G.isHeadsUpWarning("Heads up! You're trying to edit part of this sheet that shouldn't be changed accidentally. Edit anyway? Don't show this again for 5 minutes"),
+    "matches Google's exact protected-range warning");
+  // Documented wording variants: "should not", "You are trying", no title.
+  ok(G.isHeadsUpWarning("Heads up! You're trying to edit part of this sheet that should not be changed accidentally. Edit anyway?"),
+    "matches the 'should not' variant");
+  ok(G.isHeadsUpWarning("You are trying to edit part of this sheet that shouldn't be changed accidentally. Edit anyway?"),
+    "matches the older title-less variant");
+  // Defensive slow-merge variant (future-proof): title + merge + duration.
+  ok(G.isHeadsUpWarning("Heads up! Merging cells in a large spreadsheet might take up to 5 minutes."),
+    "matches a large-sheet merge warning");
+  ok(G.isHeadsUpWarning("Heads up! Merging these cells may take a while."),
+    "matches a while-taking merge warning");
+  // Everything else must stay untouched.
+  ok(!G.isHeadsUpWarning("Delete this sheet?"), "delete confirmation NOT matched");
+  ok(!G.isHeadsUpWarning("Heads up! A new version of Google Sheets is available"),
+    "unrelated 'Heads up' dialog NOT matched");
+  ok(!G.isHeadsUpWarning("Resize column C"), "resize dialog NOT matched");
+  ok(!G.isHeadsUpWarning(""), "empty text NOT matched");
+  ok(!G.isHeadsUpWarning(null), "null NOT matched");
+  // Confirm-button labels: exact allowlist only, deny list always wins.
+  ok(G.isConfirmLabel("OK") && G.isConfirmLabel("ok"), "'OK' clickable");
+  ok(G.isConfirmLabel("Edit anyway") && G.isConfirmLabel("Merge"), "'Edit anyway' / 'Merge' clickable");
+  ok(G.isConfirmLabel("Got it") && G.isConfirmLabel("Continue"), "'Got it' / 'Continue' clickable");
+  ok(!G.isConfirmLabel("Cancel"), "'Cancel' never clicked");
+  ok(!G.isConfirmLabel("Don't show this again for 5 minutes"),
+    "the 5-minute checkbox label never clicked");
+  ok(!G.isConfirmLabel("OK, apply everywhere"), "fuzzy labels never clicked (exact match only)");
+  ok(!G.isConfirmLabel(""), "empty label never clicked");
+  ok(G.CONFIRM_LABELS.every((l) => G.isConfirmLabel(l)),
+    "every allowlist entry validates (" + G.CONFIRM_LABELS.length + " labels)");
+  // The guard itself loads inert in Node (no MutationObserver) — proving
+  // the defensive init guards for the unit-stub environment.
+  ok(typeof win.OAKDialogGuard.arm === "function", "arm() exposed (dispatch/writeCell call it)");
 }
 
 console.log(`\nExtras unit result: ${passed} passed, ${failed} failed`);
